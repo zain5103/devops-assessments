@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# 1. FETCH EXISTING ACM SSL CERTIFICATE
+# 1. DATA SOURCES
 # ------------------------------------------------------------------------------
 data "aws_acm_certificate" "issued" {
   domain      = var.domain_name
@@ -7,7 +7,6 @@ data "aws_acm_certificate" "issued" {
   most_recent = true
 }
 
-# Dynamic Amazon Linux 2023 AMI Data Source
 data "aws_ami" "amazon_linux_2023" {
   most_recent = true
   owners      = ["amazon"]
@@ -19,7 +18,7 @@ data "aws_ami" "amazon_linux_2023" {
 }
 
 # ------------------------------------------------------------------------------
-# 2. NETWORKING (VPC, Subnets, IGW, Route Tables)
+# 2. NETWORKING
 # ------------------------------------------------------------------------------
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
@@ -212,10 +211,8 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 }
 
 # ------------------------------------------------------------------------------
-# 5. COMPUTE INSTANCES (Master & Agent on Amazon Linux 2023)
+# 5. COMPUTE INSTANCES (Amazon Linux 2023)
 # ------------------------------------------------------------------------------
-
-# Jenkins Master EC2
 resource "aws_instance" "jenkins_master" {
   ami                  = data.aws_ami.amazon_linux_2023.id
   instance_type        = var.master_instance_type
@@ -240,7 +237,6 @@ resource "aws_instance" "jenkins_master" {
   }
 }
 
-# Jenkins Agent / Deployment Server
 resource "aws_instance" "jenkins_agent" {
   ami                  = data.aws_ami.amazon_linux_2023.id
   instance_type        = var.instance_type
@@ -264,7 +260,7 @@ resource "aws_instance" "jenkins_agent" {
 }
 
 # ------------------------------------------------------------------------------
-# 6. APPLICATION LOAD BALANCER & HTTPS/HTTP LISTENERS
+# 6. LOAD BALANCER & LISTENERS
 # ------------------------------------------------------------------------------
 resource "aws_lb" "main" {
   name               = "${var.environment}-alb"
@@ -300,7 +296,6 @@ resource "aws_lb_target_group_attachment" "app" {
   port             = 80
 }
 
-# HTTPS (443) Listener
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
@@ -314,7 +309,6 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-# HTTP (80) Listener -> Auto Redirect to HTTPS
 resource "aws_lb_listener" "http_redirect" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
@@ -332,29 +326,14 @@ resource "aws_lb_listener" "http_redirect" {
 }
 
 # ------------------------------------------------------------------------------
-# 7. S3 BUCKET & CLOUDWATCH METRIC ALARM
+# 7. STORAGE & LOG GROUPS
 # ------------------------------------------------------------------------------
 resource "aws_s3_bucket" "app_backups" {
-  bucket        = "devops-assessment-zain-backups-2026"
+  bucket        = "devops-assessment-zain-backups-2026-v2"
   force_destroy = true
 }
 
 resource "aws_cloudwatch_log_group" "app_logs" {
-  name              = "/aws/ec2/laravel-app-logs"
+  name              = "/aws/ec2/laravel-app-logs-v2"
   retention_in_days = 7
-}
-
-resource "aws_cloudwatch_metric_alarm" "high_cpu_alarm" {
-  alarm_name          = "${var.environment}-high-cpu"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = 2
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = 120
-  statistic           = "Average"
-  threshold           = 80
-
-  dimensions = {
-    InstanceId = aws_instance.jenkins_agent.id
-  }
 }
