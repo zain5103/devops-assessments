@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'agentzain' }
+    agent { label 'zain' }
 
     environment {
         APP_DIR        = '/var/www/html/devops-assessments'
