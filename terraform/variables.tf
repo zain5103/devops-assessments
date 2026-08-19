@@ -10,10 +10,16 @@ variable "environment" {
   description = "Environment name"
 }
 
+variable "domain_name" {
+  type        = string
+  default     = "devops-assesment.thelyricsclub.com" # <-- Yahan apna asli ACM Domain Name likhein (e.g. example.com ya *.example.com)
+  description = "Domain name for existing ACM SSL Certificate"
+}
+
 variable "instance_type" {
   type        = string
   default     = "t3.small"
-  description = "EC2 Instance type for Agent"
+  description = "EC2 Instance type for Agent Node"
 }
 
 variable "master_instance_type" {
