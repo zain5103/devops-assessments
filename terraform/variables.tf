@@ -12,7 +12,7 @@ variable "environment" {
 
 variable "domain_name" {
   type        = string
-  default     = "thelyricsclub.com" # <-- Yahan apna asli ACM Domain Name likhein (e.g. example.com ya *.example.com)
+  default     = "thelyricsclub.com" # <-- Apna ACM Certificate wala domain likhein
   description = "Domain name for existing ACM SSL Certificate"
 }
 
