@@ -2,9 +2,20 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: laravel-config
+  namespace: default
 data:
   APP_ENV: "production"
   APP_DEBUG: "false"
-  DB_HOST: "mysql-service"
+  DB_HOST: "10.0.1.112"
   DB_PORT: "3306"
-  DB_DATABASE: "laravel"
+  DB_DATABASE: "devops"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: laravel-secret
+  namespace: default
+type: Opaque
+stringData:
+  DB_USERNAME: "root"
+  DB_PASSWORD: "Zain@12345"
