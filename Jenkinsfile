@@ -9,33 +9,28 @@ pipeline {
     }
 
     environment {
+        
         // =========================================================
         // APPLICATION / DOCKER
         // =========================================================
-        IMAGE_NAME      = 'my-laravel-app'
-        CONTAINER_NAME  = 'laravel_app'
+    IMAGE_NAME      = 'my-laravel-app'
+    CONTAINER_NAME  = 'laravel_app'
 
-        HOST_PORT       = '8080'
-        CONTAINER_PORT  = '80'
+    HOST_PORT       = '8080'
+    CONTAINER_PORT  = '80'
+    HEALTH_URL      = 'http://localhost:8080/health'
 
-        HEALTH_URL      = 'http://localhost:8080/health'
+    DB_CONNECTION   = 'mysql'
 
-        // =========================================================
-        // MARIADB
-        // MariaDB is installed directly on THIS Jenkins Agent EC2.
-        // Docker container reaches the host through host-gateway.
-        // =========================================================
-        DB_CONNECTION   = 'mysql'
-        DB_HOST         = 'host.docker.internal'
-        DB_PORT         = '3306'
-        DB_DATABASE     = 'devops'
-        DB_USERNAME     = 'root'
+    // Jenkins Agent ka private IP, kyunki MariaDB isi EC2 par installed hai
+    DB_HOST         = '10.0.1.112'
 
-        // =========================================================
-        // DEPLOYMENT / ROLLBACK STATE
-        // =========================================================
-        DEPLOY_DIR      = "${HOME}/jenkins-deploy"
-        STABLE_TAG_FILE = "${HOME}/jenkins-deploy/last_stable_image"
+    DB_PORT         = '3306'
+    DB_DATABASE     = 'devops'
+    DB_USERNAME     = 'root'
+
+    DEPLOY_DIR      = "${HOME}/jenkins-deploy"
+    STABLE_TAG_FILE = "${HOME}/jenkins-deploy/last_stable_image"
     }
 
     stages {
@@ -204,49 +199,46 @@ pipeline {
         // =========================================================
         stage('Deploy New Version') {
             steps {
-                script {
-                    env.DEPLOYMENT_STARTED = 'true'
-                }
-
-                echo "Deploying ${IMAGE_TAG}..."
-
-                withCredentials([
-                    string(
-                        credentialsId: 'laravel-app-key',
-                        variable: 'LARAVEL_APP_KEY'
-                    ),
-                    string(
-                        credentialsId: 'mariadb-password',
-                        variable: 'MARIADB_PASSWORD'
-                    )
-                ]) {
-                    sh '''
-                        echo "Stopping old container..."
-
-                        docker stop "$CONTAINER_NAME" 2>/dev/null || true
-                        docker rm "$CONTAINER_NAME" 2>/dev/null || true
-
-                        echo "Starting new container..."
-
-                        docker run -d \
-                            --name "$CONTAINER_NAME" \
-                            --restart unless-stopped \
-                            --add-host=host.docker.internal:host-gateway \
-                            -p "$HOST_PORT:$CONTAINER_PORT" \
-                            -e APP_ENV=production \
-                            -e APP_DEBUG=false \
-                            -e APP_KEY="$LARAVEL_APP_KEY" \
-                            -e DB_CONNECTION="$DB_CONNECTION" \
-                            -e DB_HOST="$DB_HOST" \
-                            -e DB_PORT="$DB_PORT" \
-                            -e DB_DATABASE="$DB_DATABASE" \
-                            -e DB_USERNAME="$DB_USERNAME" \
-                            -e DB_PASSWORD="$MARIADB_PASSWORD" \
-                            "$IMAGE_TAG"
-                    '''
-                }
-            }
+        script {
+            env.DEPLOYMENT_STARTED = 'true'
         }
+
+        withCredentials([
+            string(credentialsId: 'laravel-app-key', variable: 'LARAVEL_APP_KEY'),
+            string(credentialsId: 'mariadb-password', variable: 'MARIADB_PASSWORD')
+        ]) {
+            sh '''
+                set -e
+
+                echo "Stopping old container..."
+                docker stop "$CONTAINER_NAME" 2>/dev/null || true
+                docker rm "$CONTAINER_NAME" 2>/dev/null || true
+
+                echo "Starting new container..."
+                echo "Database: $DB_DATABASE"
+                echo "Database User: $DB_USERNAME"
+                echo "Database Host: $DB_HOST"
+
+                docker run -d \
+                    --name "$CONTAINER_NAME" \
+                    --restart unless-stopped \
+                    -p "$HOST_PORT:$CONTAINER_PORT" \
+                    -e APP_ENV=production \
+                    -e APP_DEBUG=false \
+                    -e APP_KEY="$LARAVEL_APP_KEY" \
+                    -e DB_CONNECTION="$DB_CONNECTION" \
+                    -e DB_HOST="$DB_HOST" \
+                    -e DB_PORT="$DB_PORT" \
+                    -e DB_DATABASE="$DB_DATABASE" \
+                    -e DB_USERNAME="$DB_USERNAME" \
+                    -e DB_PASSWORD="$MARIADB_PASSWORD" \
+                    "$IMAGE_TAG"
+
+                echo "Container started successfully."
+            '''
+        }
+    }
+}
 
 
         // =========================================================
