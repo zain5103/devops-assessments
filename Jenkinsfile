@@ -128,23 +128,38 @@ pipeline {
         // =========================================================
         stage('Trivy Image Scan') {
             steps {
-                echo "Scanning ${IMAGE_TAG} with Trivy..."
+        echo "Running Trivy security scan on ${IMAGE_TAG}..."
 
-                sh '''
-                    if ! command -v trivy >/dev/null 2>&1; then
-                        echo "ERROR: Trivy is not installed on this Jenkins Agent."
-                        exit 1
-                    fi
+        sh '''
+            if ! command -v trivy >/dev/null 2>&1; then
+                echo "ERROR: Trivy is not installed on this Jenkins Agent."
+                exit 1
+            fi
 
-                    trivy image \
-                        --exit-code 1 \
-                        --severity HIGH,CRITICAL \
-                        --ignore-unfixed \
-                        ${IMAGE_TAG}
-                '''
-            }
-        }
+            echo "=============================================="
+            echo "FULL IMAGE SECURITY REPORT"
+            echo "HIGH vulnerabilities will be reported."
+            echo "CRITICAL vulnerabilities will block deployment."
+            echo "=============================================="
 
+            trivy image \
+                --severity HIGH,CRITICAL \
+                --ignore-unfixed \
+                ${IMAGE_TAG}
+
+            echo ""
+            echo "=============================================="
+            echo "CHECKING FOR CRITICAL VULNERABILITIES"
+            echo "=============================================="
+
+            trivy image \
+                --exit-code 1 \
+                --severity CRITICAL \
+                --ignore-unfixed \
+                ${IMAGE_TAG}
+        '''
+    }
+}
 
         // =========================================================
         // 7. READ PREVIOUS STABLE IMAGE
