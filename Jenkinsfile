@@ -52,42 +52,40 @@ pipeline {
 
         stage('Deploy & Health Check with Auto-Rollback') {
             steps {
-                dir("${env.APP_DIR}") {
-                    script {
-                        try {
-                            echo "Deploying container version ${COMMIT_SHA}..."
-                            sh """
-                                docker stop ${CONTAINER_NAME} || true
-                                docker rm ${CONTAINER_NAME} || true
-                                docker run -d --name ${CONTAINER_NAME} -e DB_HOST=${DB_HOST} -p 8080:80 ${IMAGE_NAME}:${COMMIT_SHA}
-                                docker exec -i ${CONTAINER_NAME} php artisan optimize:clear || true
-                            """
-
-                            echo "Performing Health Check on http://127.0.0.1:8080..."
-                            sleep 5
-                            def healthStatus = sh(
-                                script: 'curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080',
-                                returnStdout: true
-                            ).trim()
-
-                            if (healthStatus != '200' && healthStatus != '302') {
-                                error "Health Check failed with status HTTP ${healthStatus}"
-                            } else {
-                                echo "Health Check Passed successfully with HTTP ${healthStatus}!"
-                            }
-
-                        } catch (Exception e) {
-                            echo "Deployment Failed: ${e.getMessage()}. Initiating Automatic Rollback!"
-                            sh """
-                                docker stop ${CONTAINER_NAME} || true
-                                docker rm ${CONTAINER_NAME} || true
-                                docker run -d --name ${CONTAINER_NAME} -e DB_HOST=${DB_HOST} -p 8080:80 ${IMAGE_NAME}:latest || true
-                            """
-                            error "Pipeline failed during deployment. Automatically rolled back to the last stable image."
-                        }
-                    }
+        dir('/var/www/html/devops-assessments') {
+            script {
+                echo "Deploying container version ${GIT_COMMIT:0:7}..."
+                
+                sh 'docker stop laravel_app || true'
+                sh 'docker rm laravel_app || true'
+                
+                // Pass all required DB environment variables
+                sh """
+                    docker run -d --name laravel_app \
+                    -e DB_HOST=10.0.1.112 \
+                    -e DB_PORT=3306 \
+                    -e DB_DATABASE=your_db_name \
+                    -e DB_USERNAME=your_db_user \
+                    -e DB_PASSWORD=your_db_password \
+                    -p 8080:80 my-laravel-app:${GIT_COMMIT:0:7}
+                """
+                
+                // Wait for container process initialization
+                sleep time: 3, unit: 'SECONDS'
+                
+                sh 'docker exec -i laravel_app php artisan optimize:clear'
+                
+                echo "Performing Health Check on http://127.0.0.1:8080..."
+                sleep time: 5, unit: 'SECONDS'
+                
+                def status = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080", returnStdout: true).trim()
+                
+                if (status != '200') {
+                    error "Health check failed with status code ${status}"
                 }
             }
+        }
+    }
         }
 
         stage('Database Backup Trigger') {
