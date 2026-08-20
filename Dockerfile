@@ -1,70 +1,79 @@
-# Stage 1: Build dependencies with Composer
-FROM php:8.2-cli-alpine as builder
+# ============================================================
+# Stage 1: Composer dependencies
+# ============================================================
+FROM composer:2 AS vendor
 
 WORKDIR /var/www/html
 
-# System dependencies
-RUN apk add --no-cache \
-    git \
-    curl \
-    libpng-dev \
-    oniguruma-dev \
-    libxml2-dev \
-    zip \
-    unzip
+# Copy only Composer files first.
+# This allows Docker to reuse the dependency layer when
+# application source code changes but composer files do not.
+COPY app/composer.json app/composer.lock ./
 
-# PHP extensions
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
-
-# Get Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-
-# App subfolder se composer files copy (Layer caching)
-COPY app/composer.json app/composer.lock* ./
-
-RUN composer install --no-dev --optimize-autoloader --no-scripts
-
-# App source code copy karna
-COPY app/ .
-
-# Finish autoload optimization
-RUN composer dump-autoload --optimize
+# Install production dependencies
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --prefer-dist \
+    --optimize-autoloader \
+    --no-scripts
 
 
-# Stage 2: Production Image with Apache
+# ============================================================
+# Stage 2: Production Laravel + Apache image
+# ============================================================
 FROM php:8.2-apache
 
 WORKDIR /var/www/html
 
-# Install required PHP extensions for Laravel
+# Install system dependencies required for PHP extensions
 RUN apt-get update && apt-get install -y \
+    curl \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
-    zip \
+    libzip-dev \
     unzip \
-    curl \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && docker-php-ext-install \
+        pdo_mysql \
+        mbstring \
+        bcmath \
+        exif \
+        pcntl \
+        gd \
+        zip \
+    && rm -rf /var/lib/apt/lists/*
 
-# Apache rewrite module enable karna
+# Enable Apache rewrite module
 RUN a2enmod rewrite
 
-# Apache DocumentRoot ko public folder par point karna
-ENV APACHE_DOCUMENT_ROOT /var/www/html/public
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
-RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/conf-available/*.conf
+# Configure Apache DocumentRoot for Laravel
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 
-# Builder stage se optimized codebase copy karna
-COPY --from=builder /var/www/html /var/www/html
+RUN sed -ri \
+    -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
+    /etc/apache2/sites-available/000-default.conf \
+    /etc/apache2/conf-available/*.conf
 
-# Copy entrypoint script directly from root
+# Copy Laravel application source
+COPY app/ /var/www/html/
+
+# Copy Composer dependencies from vendor stage
+COPY --from=vendor /var/www/html/vendor /var/www/html/vendor
+
+# Copy entrypoint
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Permissions set karna for storage & bootstrap cache
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+RUN chmod +x /usr/local/bin/entrypoint.sh \
+    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+
+# Container health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -fsS http://localhost/health || exit 1
 
 EXPOSE 80
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+CMD ["apache2-foreground"]
