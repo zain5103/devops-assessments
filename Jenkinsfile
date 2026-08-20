@@ -6,7 +6,11 @@ pipeline {
         IMAGE_NAME     = 'my-laravel-app'
         COMMIT_SHA     = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'latest'}"
         CONTAINER_NAME = 'laravel_app'
-        DB_HOST        = '10.0.1.112' 
+        DB_HOST        = '10.0.1.112'
+        DB_PORT        = '3306'
+        DB_DATABASE    = 'your_db_name'
+        DB_USERNAME    = 'your_db_user'
+        DB_PASSWORD    = 'your_db_password'
     }
 
     stages {
@@ -44,48 +48,46 @@ pipeline {
         stage('Build & Tag Docker Image') {
             steps {
                 dir("${env.APP_DIR}") {
-                    echo "Building Docker image for tag: ${IMAGE_NAME}:${COMMIT_SHA}"
-                    sh "docker build -t ${IMAGE_NAME}:${COMMIT_SHA} -t ${IMAGE_NAME}:latest ."
+                    echo "Building Docker image for tag: ${env.IMAGE_NAME}:${env.COMMIT_SHA}"
+                    sh "docker build -t ${env.IMAGE_NAME}:${env.COMMIT_SHA} -t ${env.IMAGE_NAME}:latest ."
                 }
             }
         }
 
         stage('Deploy & Health Check with Auto-Rollback') {
             steps {
-        dir('/var/www/html/devops-assessments') {
-            script {
-                echo "Deploying container version ${GIT_COMMIT:0:7}..."
-                
-                sh 'docker stop laravel_app || true'
-                sh 'docker rm laravel_app || true'
-                
-                // Pass all required DB environment variables
-                sh """
-                    docker run -d --name laravel_app \
-                    -e DB_HOST=10.0.1.112 \
-                    -e DB_PORT=3306 \
-                    -e DB_DATABASE=your_db_name \
-                    -e DB_USERNAME=your_db_user \
-                    -e DB_PASSWORD=your_db_password \
-                    -p 8080:80 my-laravel-app:${GIT_COMMIT:0:7}
-                """
-                
-                // Wait for container process initialization
-                sleep time: 3, unit: 'SECONDS'
-                
-                sh 'docker exec -i laravel_app php artisan optimize:clear'
-                
-                echo "Performing Health Check on http://127.0.0.1:8080..."
-                sleep time: 5, unit: 'SECONDS'
-                
-                def status = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080", returnStdout: true).trim()
-                
-                if (status != '200') {
-                    error "Health check failed with status code ${status}"
+                dir("${env.APP_DIR}") {
+                    script {
+                        echo "Deploying container version ${env.COMMIT_SHA}..."
+                        
+                        sh "docker stop ${env.CONTAINER_NAME} || true"
+                        sh "docker rm ${env.CONTAINER_NAME} || true"
+                        
+                        sh """
+                            docker run -d --name ${env.CONTAINER_NAME} \
+                            -e DB_HOST=${env.DB_HOST} \
+                            -e DB_PORT=${env.DB_PORT} \
+                            -e DB_DATABASE=${env.DB_DATABASE} \
+                            -e DB_USERNAME=${env.DB_USERNAME} \
+                            -e DB_PASSWORD=${env.DB_PASSWORD} \
+                            -p 8080:80 ${env.IMAGE_NAME}:${env.COMMIT_SHA}
+                        """
+                        
+                        sleep time: 3, unit: 'SECONDS'
+                        
+                        sh "docker exec -i ${env.CONTAINER_NAME} php artisan optimize:clear || true"
+                        
+                        echo "Performing Health Check on http://127.0.0.1:8080..."
+                        sleep time: 5, unit: 'SECONDS'
+                        
+                        def status = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080", returnStdout: true).trim()
+                        
+                        if (status != '200') {
+                            error "Health check failed with status code ${status}"
+                        }
+                    }
                 }
             }
-        }
-    }
         }
 
         stage('Database Backup Trigger') {
@@ -107,7 +109,7 @@ pipeline {
             sh 'docker image prune -f || true'
         }
         success {
-            echo "CI/CD Pipeline successfully executed for version ${COMMIT_SHA}!"
+            echo "CI/CD Pipeline successfully executed for version ${env.COMMIT_SHA}!"
         }
         failure {
             echo "CI/CD Pipeline execution failed!"
