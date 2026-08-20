@@ -22,18 +22,20 @@ FROM php:8.2-apache
 
 WORKDIR /var/www/html
 
-# Set non-interactive debconf frontend
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Optimized APT layer with clean flags to prevent build hangs
-RUN apt-get update -y && apt-get install -y --no-install-recommends \
+# System dependencies & PHP extension setup
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
     libzip-dev \
+    libfreetype6-dev \
+    libjpeg62-turbo-dev \
     unzip \
-    && docker-php-ext-install \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
         pdo_mysql \
         mbstring \
         bcmath \
