@@ -13,7 +13,7 @@ pipeline {
         CONTAINER_NAME = 'laravel_app'
 
         // Application ports
-        HOST_PORT      = '80'
+        HOST_PORT      = '8080'
         CONTAINER_PORT = '80'
 
         // Laravel health endpoint
