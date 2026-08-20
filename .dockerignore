@@ -2,9 +2,9 @@
 .git
 .gitignore
 
-# Package dependencies (Docker container ke andar fresh install honge)
-/vendor
-/node_modules
+# Package dependencies
+vendor
+node_modules
 
 # Environment & Sensitive files
 .env
@@ -19,9 +19,10 @@ docker-compose*
 # Logs and caches
 *.log
 .phpunit.result.cache
- storage/logs/*
- storage/framework/views/*
- storage/framework/cache/*
+storage/logs/*
+storage/framework/views/*
+storage/framework/cache/*
+storage/framework/sessions/*
 
 # IDEs and OS files
 .idea/
