@@ -1,5 +1,5 @@
-# Stage 1: Build dependencies with Composer (Lightweight Alpine)
-FROM php:8.2-cli-alpine AS builder
+# Stage 1: Build dependencies with Composer (PHP 8.4 Alpine)
+FROM php:8.4-cli-alpine AS builder
 
 WORKDIR /var/www/html
 
@@ -27,14 +27,14 @@ COPY app/ .
 RUN composer dump-autoload --optimize
 
 
-# Stage 2: Production Image with Apache
-FROM php:8.2-apache
+# Stage 2: Production Image with Apache (PHP 8.4 Apache)
+FROM php:8.4-apache
 
 WORKDIR /var/www/html
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# System Dependencies & Extensions (Single layer execution to prevent OOM/Build Hangups)
+# System Dependencies & Extensions
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpng-dev \
     libonig-dev \
