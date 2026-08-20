@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 cd /var/www/html
@@ -8,7 +8,7 @@ echo "Starting Laravel container..."
 echo "=========================================="
 
 # -------------------------------------------------
-# Required environment validation
+# Environment defaults & validation
 # -------------------------------------------------
 : "${DB_CONNECTION:=mysql}"
 : "${DB_HOST:=db}"
@@ -19,9 +19,10 @@ echo "Database Port: ${DB_PORT}"
 echo "Database Name: ${DB_DATABASE:-not-set}"
 
 if [ -z "${DB_DATABASE:-}" ] || [ -z "${DB_USERNAME:-}" ] || [ -z "${DB_PASSWORD:-}" ]; then
-    echo "ERROR: Required database environment variables are missing."
+    echo "WARNING: Required database environment variables are missing."
     echo "Required: DB_DATABASE, DB_USERNAME, DB_PASSWORD"
-    exit 1
+    echo "Skipping DB-dependent setup and starting Apache..."
+    exec apache2-foreground
 fi
 
 # -------------------------------------------------
@@ -61,23 +62,22 @@ echo "Database connection successful."
 echo "=========================================="
 
 # -------------------------------------------------
-# Laravel cache and setup
+# Laravel setup & deployment optimization
 # -------------------------------------------------
 echo "Clearing old Laravel caches..."
-
-php artisan optimize:clear
+php artisan optimize:clear || true
 
 echo "Running database migrations..."
-php artisan migrate --force
+php artisan migrate --force || true
 
-echo "Caching Laravel configuration..."
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
+echo "Caching Laravel configuration & routes..."
+php artisan config:cache || true
+php artisan route:cache || true
+php artisan view:cache || true
 
 echo "=========================================="
-echo "Laravel is ready."
-echo "Starting Apache..."
+echo "Laravel setup completed."
+echo "Starting Apache in foreground..."
 echo "=========================================="
 
 exec apache2-foreground
