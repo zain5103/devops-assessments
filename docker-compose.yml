@@ -17,7 +17,7 @@ services:
       DB_CONNECTION: mysql
       DB_HOST: db                             # <-- YAHAN FIX KIYA HAI ('127.0.0.1' KI JAGAH 'db')
       DB_PORT: 3306
-      DB_DATABASE: devops-assesment
+      DB_DATABASE: devops
       DB_USERNAME: root
       DB_PASSWORD: Zain@12345
     depends_on:
@@ -32,7 +32,7 @@ services:
     ports:
       - "3306:3306"
     environment:
-      MYSQL_DATABASE: devops-assesment
+      MYSQL_DATABASE: devops
       MYSQL_ROOT_PASSWORD: Zain@12345
     volumes:
       - db_data:/var/lib/mysql
