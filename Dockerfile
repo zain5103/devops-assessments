@@ -1,27 +1,25 @@
-# Stage 1: Build dependencies with Composer (PHP 8.4 Alpine)
+# Stage 1: Build dependencies with Composer (Lightweight PHP 8.4 Alpine)
 FROM php:8.4-cli-alpine AS builder
 
 WORKDIR /var/www/html
 
+# Core tools without heavy C++ packages
 RUN apk add --no-cache \
     git \
     curl \
-    libpng-dev \
-    oniguruma-dev \
-    libxml2-dev \
-    zip \
     unzip
 
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+# Install lightweight required extensions
+RUN docker-php-ext-install pdo_mysql bcmath
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Layer caching optimization
+# Copy composer files for caching
 COPY app/composer.json app/composer.lock* ./
 
 RUN composer install --no-dev --optimize-autoloader --no-scripts
 
-# App source code copy
+# Copy application source code
 COPY app/ .
 
 RUN composer dump-autoload --optimize
@@ -34,7 +32,7 @@ WORKDIR /var/www/html
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# System Dependencies & Extensions
+# Essential packages & extensions in a single optimized layer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpng-dev \
     libonig-dev \
@@ -49,15 +47,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Apache modules setup
 RUN a2enmod rewrite
 
-# Apache DocumentRoot pointing to public folder
+# Update Apache DocumentRoot to point to public/
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
 RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/conf-available/*.conf
 
-# Copy compiled code from builder
+# Copy application from builder
 COPY --from=builder /var/www/html /var/www/html
 
-# Copy entrypoint script
+# Entrypoint setup
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
