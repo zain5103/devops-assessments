@@ -1,46 +1,33 @@
-version: '3.8'
-
 services:
-  # 1. Laravel Application Container
   app:
     build:
       context: .
       dockerfile: Dockerfile
+
     container_name: laravel_app
-    restart: always
+
+    restart: unless-stopped
+
     ports:
-      - "8000:80"
+      - "8080:80"
+
     environment:
-      APP_ENV: local
+      # Laravel Configuration
+      APP_ENV: production
       APP_DEBUG: "false"
-      APP_KEY: "base64:79diLxbM3/y28VpmB5guR0XKk8FSz8BMGXgWg3qu8ko="
+      APP_KEY: "base64:79diLxbM3/y28VpmB5guR0XKk8FSz8BMGXgW3qu8ko="
+
+      # Internal MariaDB Configuration
       DB_CONNECTION: mysql
-      DB_HOST: db                             # <-- YAHAN FIX KIYA HAI ('127.0.0.1' KI JAGAH 'db')
+      DB_HOST: "10.0.1.112"
       DB_PORT: 3306
       DB_DATABASE: devops
       DB_USERNAME: root
-      DB_PASSWORD: Zain@12345
-    depends_on:
-      db:
-        condition: service_healthy
+      DB_PASSWORD: "Zain@12345"
 
-  # 2. MySQL Database Container
-  db:
-    image: mysql:8.0
-    container_name: mysql_db
-    restart: always
-    ports:
-      - "3306:3306"
-    environment:
-      MYSQL_DATABASE: devops
-      MYSQL_ROOT_PASSWORD: Zain@12345
-    volumes:
-      - db_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  db_data:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
