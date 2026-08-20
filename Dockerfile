@@ -1,67 +1,68 @@
-# ============================================================
-# Stage 1: Composer dependencies
-# ============================================================
-FROM composer:2 AS vendor
+# Stage 1: Build dependencies with Composer (Lightweight Alpine)
+FROM php:8.2-cli-alpine AS builder
 
 WORKDIR /var/www/html
 
-COPY app/composer.json app/composer.lock ./
+RUN apk add --no-cache \
+    git \
+    curl \
+    libpng-dev \
+    oniguruma-dev \
+    libxml2-dev \
+    zip \
+    unzip
 
-RUN composer install \
-    --no-dev \
-    --no-interaction \
-    --prefer-dist \
-    --optimize-autoloader \
-    --no-scripts
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
-# ============================================================
-# Stage 2: Production Laravel + Apache image
-# ============================================================
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Layer caching optimization
+COPY app/composer.json app/composer.lock* ./
+
+RUN composer install --no-dev --optimize-autoloader --no-scripts
+
+# App source code copy
+COPY app/ .
+
+RUN composer dump-autoload --optimize
+
+
+# Stage 2: Production Image with Apache
 FROM php:8.2-apache
 
 WORKDIR /var/www/html
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install dependencies and extensions in clean layer
+# System Dependencies & Extensions (Single layer execution to prevent OOM/Build Hangups)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
-    libzip-dev \
-    libfreetype6-dev \
-    libjpeg62-turbo-dev \
+    zip \
     unzip \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
-        pdo_mysql \
-        mbstring \
-        bcmath \
-        exif \
-        pcntl \
-        gd \
-        zip \
+    curl \
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    && rm -rf /var/lib/apt/lists/*
 
 # Apache modules setup
 RUN a2enmod rewrite
 
+# Apache DocumentRoot pointing to public folder
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/conf-available/*.conf
 
-RUN sed -ri \
-    -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
-    /etc/apache2/sites-available/000-default.conf \
-    /etc/apache2/conf-available/*.conf
+# Copy compiled code from builder
+COPY --from=builder /var/www/html /var/www/html
 
-# Copy application files
-COPY app/ /var/www/html/
-COPY --from=vendor /var/www/html/vendor /var/www/html/vendor
+# Copy entrypoint script
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
-RUN chmod +x /usr/local/bin/entrypoint.sh \
-    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+# Permissions setup
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 EXPOSE 80
