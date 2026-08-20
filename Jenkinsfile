@@ -17,7 +17,7 @@ pipeline {
         CONTAINER_PORT = '80'
 
         // Laravel health endpoint
-        HEALTH_URL     = 'http://localhost/health'
+        HEALTH_URL     = 'http://localhost:8080/health'
 
         // Persistent deployment state inside the Jenkins Agent user's HOME
         DEPLOY_DIR     = "${HOME}/jenkins-deploy"
