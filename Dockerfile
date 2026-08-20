@@ -14,7 +14,6 @@ RUN composer install \
     --optimize-autoloader \
     --no-scripts
 
-
 # ============================================================
 # Stage 2: Production Laravel + Apache image
 # ============================================================
@@ -24,7 +23,7 @@ WORKDIR /var/www/html
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# System dependencies & PHP extension setup
+# Install dependencies and extensions in clean layer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     libpng-dev \
@@ -46,10 +45,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Enable Apache rewrite module
+# Apache modules setup
 RUN a2enmod rewrite
 
-# Configure Apache DocumentRoot for Laravel
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 
 RUN sed -ri \
@@ -57,24 +55,16 @@ RUN sed -ri \
     /etc/apache2/sites-available/000-default.conf \
     /etc/apache2/conf-available/*.conf
 
-# Copy Laravel application source
+# Copy application files
 COPY app/ /var/www/html/
-
-# Copy Composer dependencies from vendor stage
 COPY --from=vendor /var/www/html/vendor /var/www/html/vendor
-
-# Copy entrypoint
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod +x /usr/local/bin/entrypoint.sh \
     && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD curl -fsS http://localhost/health || exit 1
-
 EXPOSE 80
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-
 CMD ["apache2-foreground"]
