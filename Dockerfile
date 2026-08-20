@@ -5,12 +5,8 @@ FROM composer:2 AS vendor
 
 WORKDIR /var/www/html
 
-# Copy only Composer files first.
-# This allows Docker to reuse the dependency layer when
-# application source code changes but composer files do not.
 COPY app/composer.json app/composer.lock ./
 
-# Install production dependencies
 RUN composer install \
     --no-dev \
     --no-interaction \
@@ -26,8 +22,11 @@ FROM php:8.2-apache
 
 WORKDIR /var/www/html
 
-# Install system dependencies required for PHP extensions
-RUN apt-get update && apt-get install -y \
+# Set non-interactive debconf frontend
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Optimized APT layer with clean flags to prevent build hangs
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
     curl \
     libpng-dev \
     libonig-dev \
@@ -42,7 +41,8 @@ RUN apt-get update && apt-get install -y \
         pcntl \
         gd \
         zip \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Enable Apache rewrite module
 RUN a2enmod rewrite
@@ -68,7 +68,6 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
     && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Container health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -fsS http://localhost/health || exit 1
 
