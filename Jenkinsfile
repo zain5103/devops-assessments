@@ -8,9 +8,11 @@ pipeline {
         CONTAINER_NAME = 'laravel_app'
         DB_HOST        = '10.0.1.112'
         DB_PORT        = '3306'
-        DB_DATABASE    = 'your_db_name'
-        DB_USERNAME    = 'your_db_user'
-        DB_PASSWORD    = 'your_db_password'
+        
+        // APNE ACTUAL DATABASE DETAILS YAHAN SET KAREIN
+        DB_DATABASE    = 'devops'
+        DB_USERNAME    = 'root'
+        DB_PASSWORD    = 'Zain@12345'
     }
 
     stages {
@@ -73,17 +75,23 @@ pipeline {
                             -p 8080:80 ${env.IMAGE_NAME}:${env.COMMIT_SHA}
                         """
                         
-                        sleep time: 3, unit: 'SECONDS'
+                        echo "Waiting for container boot..."
+                        sleep time: 5, unit: 'SECONDS'
                         
                         sh "docker exec -i ${env.CONTAINER_NAME} php artisan optimize:clear || true"
                         
                         echo "Performing Health Check on http://127.0.0.1:8080..."
-                        sleep time: 5, unit: 'SECONDS'
+                        sleep time: 3, unit: 'SECONDS'
                         
-                        def status = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080", returnStdout: true).trim()
+                        def status = sh(
+                            script: "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080", 
+                            returnStdout: true
+                        ).trim()
+                        
+                        echo "Received HTTP Status Code: ${status}"
                         
                         if (status != '200') {
-                            error "Health check failed with status code ${status}"
+                            error "Health check failed with HTTP status: ${status}"
                         }
                     }
                 }
