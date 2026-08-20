@@ -1,37 +1,62 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: laravel-app
+  name: laravel-app-deployment
+  namespace: default
   labels:
-    app: laravel
+    app: laravel-app
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
-      app: laravel
+      app: laravel-app
   template:
     metadata:
       labels:
-        app: laravel
+        app: laravel-app
     spec:
       containers:
-      - name: laravel
-        image: laravel-app:latest
+      - name: laravel-container
+        image: my-laravel-app:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 80
+        
+        # Secrets & ConfigMap integration
         envFrom:
         - configMapRef:
             name: laravel-config
+        - secretRef:
+            name: laravel-secret
+
+        # Resource Limits (Resource allocation)
         resources:
           requests:
             memory: "128Mi"
-            cpu: "250m"
+            cpu: "100m"
           limits:
             memory: "512Mi"
             cpu: "500m"
+
+        # Liveness Probe (Checks if container crashed)
         livenessProbe:
           httpGet:
             path: /
             port: 80
           initialDelaySeconds: 15
-          periodSeconds: 20
+          periodSeconds: 10
+          failureThreshold: 3
+
+        # Readiness Probe (Checks if container is ready to accept traffic)
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 2
