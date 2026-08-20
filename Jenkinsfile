@@ -6,8 +6,6 @@ pipeline {
         IMAGE_NAME     = 'my-laravel-app'
         COMMIT_SHA     = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'latest'}"
         CONTAINER_NAME = 'laravel_app'
-        
-        // Terraform RDS/DB Private IP Update
         DB_HOST        = '10.0.1.112' 
     }
 
@@ -36,6 +34,13 @@ pipeline {
             }
         }
 
+        stage('Prune Old Docker Cache') {
+            steps {
+                echo 'Cleaning up unused Docker resources to free disk space...'
+                sh 'docker image prune -f || true'
+            }
+        }
+
         stage('Build & Tag Docker Image') {
             steps {
                 dir("${env.APP_DIR}") {
@@ -58,7 +63,6 @@ pipeline {
                                 docker exec -i ${CONTAINER_NAME} php artisan optimize:clear || true
                             """
 
-                            // Automated Health Check (127.0.0.1 for local network binding clarity)
                             echo "Performing Health Check on http://127.0.0.1:8080..."
                             sleep 5
                             def healthStatus = sh(
@@ -101,6 +105,9 @@ pipeline {
     }
 
     post {
+        always {
+            sh 'docker image prune -f || true'
+        }
         success {
             echo "CI/CD Pipeline successfully executed for version ${COMMIT_SHA}!"
         }
