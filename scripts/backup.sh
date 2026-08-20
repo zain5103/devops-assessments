@@ -2,7 +2,7 @@
 
 DATE=$(date +%F-%H-%M)
 
-DB_NAME="devops-assesment"
+DB_NAME="devops"
 DB_USER="root"
 DB_PASSWORD="Zain@12345"
 
