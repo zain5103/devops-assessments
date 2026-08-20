@@ -9,17 +9,19 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME       = 'my-laravel-app'
-        CONTAINER_NAME   = 'laravel_app'
+        IMAGE_NAME     = 'my-laravel-app'
+        CONTAINER_NAME = 'laravel_app'
 
-        // Application runs on port 80 of Jenkins Agent
-        HOST_PORT        = '80'
-        CONTAINER_PORT   = '80'
+        // Application ports
+        HOST_PORT      = '80'
+        CONTAINER_PORT = '80'
 
-        HEALTH_URL       = 'http://localhost/health'
+        // Laravel health endpoint
+        HEALTH_URL     = 'http://localhost/health'
 
-        // Stores the last successfully deployed immutable image
-        STABLE_TAG_FILE  = '/opt/jenkins-deploy/last_stable_image'
+        // Persistent deployment state inside the Jenkins Agent user's HOME
+        DEPLOY_DIR     = "${HOME}/jenkins-deploy"
+        STABLE_TAG_FILE = "${HOME}/jenkins-deploy/last_stable_image"
     }
 
     stages {
@@ -47,7 +49,7 @@ pipeline {
 
 
         // =========================================================
-        // 2. INSTALL DEPENDENCIES FOR TESTING
+        // 2. INSTALL TEST DEPENDENCIES
         // =========================================================
         stage('Install Test Dependencies') {
             steps {
@@ -74,7 +76,7 @@ pipeline {
                 echo 'Running Laravel automated tests...'
 
                 sh '''
-                    cd app
+                    cd "$WORKSPACE/app"
 
                     if [ ! -f artisan ]; then
                         echo "ERROR: Laravel artisan file not found."
@@ -88,7 +90,7 @@ pipeline {
 
 
         // =========================================================
-        // 4. DEPENDENCY SECURITY SCAN
+        // 4. DEPENDENCY SECURITY AUDIT
         // =========================================================
         stage('Composer Security Audit') {
             steps {
@@ -106,16 +108,16 @@ pipeline {
 
 
         // =========================================================
-        // 5. BUILD DOCKER IMAGE
-        // Uses Docker layer caching - NO --no-cache
+        // 5. BUILD IMMUTABLE DOCKER IMAGE
+        // Docker layer caching enabled
         // =========================================================
         stage('Build Docker Image') {
             steps {
-                echo "Building immutable image: ${IMAGE_TAG}"
+                echo "Building image: ${IMAGE_TAG}"
 
                 sh '''
                     docker build \
-                        -t ${IMAGE_TAG} \
+                        -t "$IMAGE_TAG" \
                         .
                 '''
             }
@@ -124,63 +126,61 @@ pipeline {
 
         // =========================================================
         // 6. TRIVY IMAGE SECURITY SCAN
-        // HIGH/CRITICAL vulnerabilities fail the pipeline
+        // HIGH = report
+        // CRITICAL = block deployment
         // =========================================================
         stage('Trivy Image Scan') {
             steps {
-        echo "Running Trivy security scan on ${IMAGE_TAG}..."
+                echo "Running Trivy security scan on ${IMAGE_TAG}..."
 
-        sh '''
-            if ! command -v trivy >/dev/null 2>&1; then
-                echo "ERROR: Trivy is not installed on this Jenkins Agent."
-                exit 1
-            fi
+                sh '''
+                    if ! command -v trivy >/dev/null 2>&1; then
+                        echo "ERROR: Trivy is not installed on this Jenkins Agent."
+                        exit 1
+                    fi
 
-            echo "=============================================="
-            echo "FULL IMAGE SECURITY REPORT"
-            echo "HIGH vulnerabilities will be reported."
-            echo "CRITICAL vulnerabilities will block deployment."
-            echo "=============================================="
+                    echo "=============================================="
+                    echo "FULL IMAGE SECURITY REPORT"
+                    echo "=============================================="
 
-            trivy image \
-                --severity HIGH,CRITICAL \
-                --ignore-unfixed \
-                ${IMAGE_TAG}
+                    trivy image \
+                        --severity HIGH,CRITICAL \
+                        --ignore-unfixed \
+                        "$IMAGE_TAG"
 
-            echo ""
-            echo "=============================================="
-            echo "CHECKING FOR CRITICAL VULNERABILITIES"
-            echo "=============================================="
+                    echo ""
+                    echo "=============================================="
+                    echo "CRITICAL VULNERABILITY GATE"
+                    echo "=============================================="
 
-            trivy image \
-                --exit-code 1 \
-                --severity CRITICAL \
-                --ignore-unfixed \
-                ${IMAGE_TAG}
-        '''
-    }
-}
+                    trivy image \
+                        --exit-code 1 \
+                        --severity CRITICAL \
+                        --ignore-unfixed \
+                        "$IMAGE_TAG"
+                '''
+            }
+        }
+
 
         // =========================================================
-        // 7. READ PREVIOUS STABLE IMAGE
+        // 7. PREPARE DEPLOYMENT
+        // Read previous stable image
         // =========================================================
         stage('Prepare Deployment') {
             steps {
-                script {
-                    env.DEPLOYMENT_STARTED = 'false'
+                sh '''
+                    mkdir -p "$DEPLOY_DIR"
 
-                    sh '''
-                        mkdir -p "$(dirname ${STABLE_TAG_FILE})"
+                    echo "Deployment directory: $DEPLOY_DIR"
 
-                        echo "Current stable release:"
-
-                        if [ -f ${STABLE_TAG_FILE} ]; then
-                            cat ${STABLE_TAG_FILE}
-                        else
-                            echo "No previous stable release found."
-                        fi
-                    '''
-                }
+                    if [ -f "$STABLE_TAG_FILE" ]; then
+                        echo "Previous stable image:"
+                        cat "$STABLE_TAG_FILE"
+                    else
+                        echo "No previous stable image found. First deployment."
+                    fi
+                '''
             }
         }
 
@@ -191,58 +191,62 @@ pipeline {
         stage('Deploy New Version') {
             steps {
                 script {
-                    // From this point, a failure can require rollback
                     env.DEPLOYMENT_STARTED = 'true'
                 }
 
                 echo "Deploying ${IMAGE_TAG}..."
 
                 sh '''
-                    docker stop ${CONTAINER_NAME} 2>/dev/null || true
-                    docker rm ${CONTAINER_NAME} 2>/dev/null || true
+                    echo "Stopping existing container..."
+
+                    docker stop "$CONTAINER_NAME" 2>/dev/null || true
+                    docker rm "$CONTAINER_NAME" 2>/dev/null || true
+
+                    echo "Starting new container..."
 
                     docker run -d \
-                        --name ${CONTAINER_NAME} \
+                        --name "$CONTAINER_NAME" \
                         --restart unless-stopped \
-                        -p ${HOST_PORT}:${CONTAINER_PORT} \
-                        ${IMAGE_TAG}
+                        -p "$HOST_PORT:$CONTAINER_PORT" \
+                        "$IMAGE_TAG"
                 '''
             }
         }
 
 
         // =========================================================
-        // 9. DOCKER CONTAINER HEALTH CHECK
+        // 9. CONTAINER STARTUP CHECK
+        // Works even if Dockerfile has no HEALTHCHECK
         // =========================================================
         stage('Container Health Check') {
             steps {
-                echo 'Waiting for container health check...'
+                echo 'Waiting for container to start...'
 
                 sh '''
                     for i in $(seq 1 12); do
 
                         STATUS=$(docker inspect \
-                            --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
-                            ${CONTAINER_NAME})
+                            --format='{{.State.Status}}' \
+                            "$CONTAINER_NAME" 2>/dev/null || echo "not-found")
 
                         echo "Container status: $STATUS"
 
-                        if [ "$STATUS" = "healthy" ]; then
-                            echo "Container is healthy."
+                        if [ "$STATUS" = "running" ]; then
+                            echo "Container is running."
                             exit 0
                         fi
 
-                        if [ "$STATUS" = "unhealthy" ] || [ "$STATUS" = "exited" ]; then
-                            echo "Container failed."
-                            docker logs ${CONTAINER_NAME} || true
+                        if [ "$STATUS" = "exited" ] || [ "$STATUS" = "dead" ] || [ "$STATUS" = "not-found" ]; then
+                            echo "Container failed to start."
+                            docker logs "$CONTAINER_NAME" || true
                             exit 1
                         fi
 
                         sleep 5
                     done
 
-                    echo "Container did not become healthy in time."
-                    docker logs ${CONTAINER_NAME} || true
+                    echo "Container did not start in time."
+                    docker logs "$CONTAINER_NAME" || true
                     exit 1
                 '''
             }
@@ -250,7 +254,7 @@ pipeline {
 
 
         // =========================================================
-        // 10. APPLICATION SMOKE TEST
+        // 10. APPLICATION HEALTH / SMOKE TEST
         // =========================================================
         stage('Application Smoke Test') {
             steps {
@@ -262,12 +266,13 @@ pipeline {
                         --show-error \
                         --output /dev/null \
                         --write-out "%{http_code}" \
-                        ${HEALTH_URL})
+                        "$HEALTH_URL" || true)
 
                     echo "Health endpoint returned HTTP $HTTP_CODE"
 
                     if [ "$HTTP_CODE" != "200" ]; then
-                        echo "ERROR: Smoke test failed."
+                        echo "ERROR: Application smoke test failed."
+                        docker logs "$CONTAINER_NAME" || true
                         exit 1
                     fi
                 '''
@@ -276,19 +281,20 @@ pipeline {
 
 
         // =========================================================
-        // 11. MARK NEW RELEASE AS STABLE
+        // 11. MARK RELEASE AS STABLE
+        // Only runs after successful smoke test
         // =========================================================
         stage('Mark Release Stable') {
             steps {
-                echo "Marking ${IMAGE_TAG} as the last stable release..."
+                echo "Marking ${IMAGE_TAG} as stable..."
 
                 sh '''
-                    mkdir -p "$(dirname ${STABLE_TAG_FILE})"
+                    mkdir -p "$DEPLOY_DIR"
 
-                    echo "${IMAGE_TAG}" > ${STABLE_TAG_FILE}
+                    echo "$IMAGE_TAG" > "$STABLE_TAG_FILE"
 
                     echo "Stable release saved:"
-                    cat ${STABLE_TAG_FILE}
+                    cat "$STABLE_TAG_FILE"
                 '''
             }
         }
@@ -302,9 +308,9 @@ pipeline {
                 echo 'Running database backup...'
 
                 sh '''
-                    if [ -f scripts/backup.sh ]; then
-                        chmod +x scripts/backup.sh
-                        bash scripts/backup.sh
+                    if [ -f "$WORKSPACE/scripts/backup.sh" ]; then
+                        chmod +x "$WORKSPACE/scripts/backup.sh"
+                        bash "$WORKSPACE/scripts/backup.sh"
                     else
                         echo "ERROR: scripts/backup.sh not found."
                         exit 1
@@ -329,21 +335,20 @@ pipeline {
 
 
     // =============================================================
-    // POST ACTIONS
+    // POST ACTIONS - AUTOMATIC ROLLBACK
     // =============================================================
     post {
 
         failure {
             script {
-                // Rollback ONLY if deployment had actually started
                 if (env.DEPLOYMENT_STARTED == 'true') {
 
-                    echo 'Deployment-related failure detected. Starting rollback...'
+                    echo 'Deployment failure detected. Starting automatic rollback...'
 
                     sh '''
-                        if [ -f ${STABLE_TAG_FILE} ]; then
+                        if [ -f "$STABLE_TAG_FILE" ]; then
 
-                            PREVIOUS_IMAGE=$(cat ${STABLE_TAG_FILE})
+                            PREVIOUS_IMAGE=$(cat "$STABLE_TAG_FILE")
 
                             echo "Previous stable image: $PREVIOUS_IMAGE"
 
@@ -351,18 +356,35 @@ pipeline {
 
                                 echo "Stopping failed release..."
 
-                                docker stop ${CONTAINER_NAME} 2>/dev/null || true
-                                docker rm ${CONTAINER_NAME} 2>/dev/null || true
+                                docker stop "$CONTAINER_NAME" 2>/dev/null || true
+                                docker rm "$CONTAINER_NAME" 2>/dev/null || true
 
                                 echo "Starting previous stable release..."
 
                                 docker run -d \
-                                    --name ${CONTAINER_NAME} \
+                                    --name "$CONTAINER_NAME" \
                                     --restart unless-stopped \
-                                    -p ${HOST_PORT}:${CONTAINER_PORT} \
+                                    -p "$HOST_PORT:$CONTAINER_PORT" \
                                     "$PREVIOUS_IMAGE"
 
-                                echo "Rollback completed successfully."
+                                echo "Rollback completed."
+
+                                sleep 5
+
+                                ROLLBACK_CODE=$(curl \
+                                    --silent \
+                                    --output /dev/null \
+                                    --write-out "%{http_code}" \
+                                    "$HEALTH_URL" || true)
+
+                                echo "Rollback health check HTTP: $ROLLBACK_CODE"
+
+                                if [ "$ROLLBACK_CODE" = "200" ]; then
+                                    echo "Rollback verification successful."
+                                else
+                                    echo "WARNING: Rollback container started but health check failed."
+                                    docker logs "$CONTAINER_NAME" || true
+                                fi
 
                             else
                                 echo "ERROR: Previous stable image does not exist locally."
@@ -379,6 +401,7 @@ pipeline {
             }
         }
 
+
         success {
             echo '=========================================='
             echo 'CI/CD PIPELINE COMPLETED SUCCESSFULLY'
@@ -386,6 +409,7 @@ pipeline {
             echo "Image: ${IMAGE_TAG}"
             echo '=========================================='
         }
+
 
         always {
             echo 'Pipeline execution finished.'
