@@ -11,7 +11,8 @@ pipeline {
         
         // Jenkins Credentials Manager use karna best practice hai
         DB_DATABASE    = 'devops'
-        DB_USERNAME    = 'root'
+        // DB_USERNAME    = 'root'
+        DB_USERNAME = credentials('root') 
         DB_PASSWORD = credentials('My-DB-Pass') 
         // DB_PASSWORD    = 'Zain@12345'
     }
