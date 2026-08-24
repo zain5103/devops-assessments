@@ -60,6 +60,7 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Permissions setup
+sudo chown -R ec2-user:apache /var/www/html
 sudo chmod 2775 /var/www/html/devops-assessments/app
 find /var/www/html/devops-assessments/app -type d -exec sudo chmod 2775 {} +
 find /var/www/html/devops-assessments/app -type f -exec sudo chmod 0664 {} +
