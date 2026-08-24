@@ -62,15 +62,16 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 # Permissions setup (FIXED)
 # 1. Laravel ke zaroori folders create karein (sahi paths ke sath)
 # Zaroori folders create karein exact us path par jo error mein hai
-RUN mkdir -p /var/www/html/devops-assessments/app/storage/framework/{sessions,views,cache} \
-    && mkdir -p /var/www/html/devops-assessments/app/storage/logs \
-    && mkdir -p /var/www/html/devops-assessments/app/bootstrap/cache
+# 1. Laravel ke zaroori folders create karein
+RUN mkdir -p /var/www/html/storage/framework/{sessions,views,cache} \
+    && mkdir -p /var/www/html/storage/logs \
+    && mkdir -p /var/www/html/bootstrap/cache
 
-# Ownership aur Permissions set karein (www-data ko access dein)
-RUN chown -R www-data:www-data /var/www/html/devops-assessments/app \
-    && chmod -R 755 /var/www/html/devops-assessments/app \
-    && chmod -R 775 /var/www/html/devops-assessments/app/storage \
-    && chmod -R 775 /var/www/html/devops-assessments/app/bootstrap/cache
+# 2. Ownership aur Permissions www-data aur sahi paths ke sath set karein
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html \
+    && chmod -R 775 /var/www/html/storage \
+    && chmod -R 775 /var/www/html/bootstrap/cache
 
 EXPOSE 80
 
