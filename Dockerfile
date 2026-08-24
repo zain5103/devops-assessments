@@ -60,10 +60,16 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Permissions setup
-sudo chown -R ec2-user:apache /var/www/html
-sudo chmod 2775 /var/www/html/devops-assessments/app
-find /var/www/html/devops-assessments/app -type d -exec sudo chmod 2775 {} +
-find /var/www/html/devops-assessments/app -type f -exec sudo chmod 0664 {} +
+# 1. Laravel ke zaroori folders create karein (taake missing folder ka error na aaye)
+RUN mkdir -p /var/www/html/devops-assessments/app/storage/framework/{sessions,views,cache} \
+    && mkdir -p /var/www/html/devops-assessments/app/storage/logs \
+    && mkdir -p /var/www/html/devops-assessments/app/bootstrap/cache
+
+# 2. Ownership aur Permissions set karein (sudo aur find ke baghair)
+RUN chown -R apache:apache /var/www/html \
+    && chmod -R 755 /var/www/html \
+    && chmod -R 775 /var/www/html/devops-assessments/app/storage \
+    && chmod -R 775 /var/www/html/devops-assessments/app/bootstrap/cache
 # RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
 #    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
