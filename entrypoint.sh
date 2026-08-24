@@ -70,11 +70,6 @@ php artisan optimize:clear || true
 echo "Running database migrations..."
 php artisan migrate --force || true
 
-# Permissions
-sudo chown -R ec2-user:apache /var/www/html 
-sudo chmod 2775 /var/www/html/devops-assessments/app
-find /var/www/html/devops-assessments/app -type d -exec sudo chmod 2775 {} +
-find /var/www/html/devops-assessments/app -type f -exec sudo chmod 0664 {} +
 
 echo "Caching Laravel configuration & routes..."
 php artisan config:cache || true
