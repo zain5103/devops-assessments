@@ -59,19 +59,17 @@ COPY --from=builder /var/www/html /var/www/html
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Permissions setup
-# 1. Laravel ke zaroori folders create karein (taake missing folder ka error na aaye)
-RUN mkdir -p /var/www/html/devops-assessments/app/storage/framework/{sessions,views,cache} \
-    && mkdir -p /var/www/html/devops-assessments/app/storage/logs \
-    && mkdir -p /var/www/html/devops-assessments/app/bootstrap/cache
+# Permissions setup (FIXED)
+# 1. Laravel ke zaroori folders create karein (sahi paths ke sath)
+RUN mkdir -p /var/www/html/storage/framework/{sessions,views,cache} \
+    && mkdir -p /var/www/html/storage/logs \
+    && mkdir -p /var/www/html/bootstrap/cache
 
-# 2. Ownership aur Permissions set karein (sudo aur find ke baghair)
-RUN chown -R apache:apache /var/www/html \
+# 2. Ownership aur Permissions set karein (www-data aur sahi paths ke sath)
+RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html \
-    && chmod -R 775 /var/www/html/devops-assessments/app/storage \
-    && chmod -R 775 /var/www/html/devops-assessments/app/bootstrap/cache
-# RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
-#    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+    && chmod -R 775 /var/www/html/storage \
+    && chmod -R 775 /var/www/html/bootstrap/cache
 
 EXPOSE 80
 
