@@ -60,8 +60,11 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Permissions setup
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
-    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+sudo chmod 2775 /var/www/html/devops-assessments/app
+find /var/www/html/devops-assessments/app -type d -exec sudo chmod 2775 {} +
+find /var/www/html/devops-assessments/app -type f -exec sudo chmod 0664 {} +
+# RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+#    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 EXPOSE 80
 
