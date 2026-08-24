@@ -73,11 +73,6 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 /var/www/html/storage \
     && chmod -R 775 /var/www/html/bootstrap/cache
 
-
-# 3. Cache clear karein
-cd /var/www/html/devops-assessments/app
-sudo php artisan optimize:clear
-
 EXPOSE 80
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
