@@ -63,15 +63,26 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 # 1. Laravel ke zaroori folders create karein (sahi paths ke sath)
 # Zaroori folders create karein exact us path par jo error mein hai
 # 1. Laravel ke zaroori folders create karein
-RUN mkdir -p /var/www/html/storage/framework/{sessions,views,cache} \
-    && mkdir -p /var/www/html/storage/logs \
-    && mkdir -p /var/www/html/bootstrap/cache
+# RUN mkdir -p /var/www/html/storage/framework/{sessions,views,cache} \
+#     && mkdir -p /var/www/html/storage/logs \
+#     && mkdir -p /var/www/html/bootstrap/cache
 
-# 2. Ownership aur Permissions www-data aur sahi paths ke sath set karein
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html \
-    && chmod -R 775 /var/www/html/storage \
-    && chmod -R 775 /var/www/html/bootstrap/cache
+# # 2. Ownership aur Permissions www-data aur sahi paths ke sath set karein
+# RUN chown -R www-data:www-data /var/www/html \
+#     && chmod -R 755 /var/www/html \
+#     && chmod -R 775 /var/www/html/storage \
+#     && chmod -R 775 /var/www/html/bootstrap/cache
+
+sudo chown -R apache:apache /var/www/html/devops-assessments/app/storage
+sudo chown -R apache:apache /var/www/html/devops-assessments/app/bootstrap/cache
+
+# 2. Write permissions dein
+sudo chmod -R 775 /var/www/html/devops-assessments/app/storage
+sudo chmod -R 775 /var/www/html/devops-assessments/app/bootstrap/cache
+
+# 3. Cache clear karein
+cd /var/www/html/devops-assessments/app
+sudo php artisan optimize:clear
 
 EXPOSE 80
 
